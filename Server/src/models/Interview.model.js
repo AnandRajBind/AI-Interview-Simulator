@@ -14,7 +14,13 @@ const interviewSchema = new mongoose.Schema({
   difficulty: {
     type: String,
     required: [true, 'Difficulty is required'],
+    enum: ['easy', 'medium', 'hard'],
     trim: true
+  },
+  status: {
+    type: String,
+    enum: ['in-progress', 'completed'],
+    default: 'in-progress'
   },
   questions: {
     type: [String],
@@ -30,7 +36,9 @@ const interviewSchema = new mongoose.Schema({
   },
   overallScore: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0,
+    max: 100
   },
   feedback: {
     type: String,
@@ -39,11 +47,15 @@ const interviewSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  completedAt: {
+    type: Date
   }
 });
 
 // Add indexes
 interviewSchema.index({ userId: 1 });
 interviewSchema.index({ createdAt: -1 });
+interviewSchema.index({ status: 1, userId: 1 });
 
 module.exports = mongoose.model('Interview', interviewSchema);

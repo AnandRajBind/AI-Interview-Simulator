@@ -1,5 +1,6 @@
 const Interview = require('../models/Interview.model');
 const { generateQuestions, evaluateAnswers } = require('../services/ai.service');
+const aiServiceMock = require('../services/ai.service.mock');
 
 /**
  * @desc    Start a new interview
@@ -27,7 +28,13 @@ const startInterview = async (req, res, next) => {
     }
 
     // Generate questions using AI service
-    const result = await generateQuestions(domain, difficulty);
+    let result = await generateQuestions(domain, difficulty);
+
+    // Fallback to mock service if OpenAI fails (quota exceeded, etc.)
+    if (!result.success) {
+      console.warn('⚠️  OpenAI failed, using mock questions for testing...');
+      result = await aiServiceMock.generateQuestions(domain, difficulty);
+    }
 
     if (!result.success) {
       const error = new Error(result.message || 'Failed to generate questions');
@@ -102,6 +109,13 @@ const submitInterview = async (req, res, next) => {
       throw error;
     }
 
+    // Check if interview is already completed
+    if (interview.status === 'completed') {
+      const error = new Error('This interview has already been submitted');
+      error.statusCode = 400;
+      throw error;
+    }
+
     // Validate answers count matches questions count
     if (answers.length !== interview.questions.length) {
       const error = new Error(`Expected ${interview.questions.length} answers, received ${answers.length}`);
@@ -110,7 +124,13 @@ const submitInterview = async (req, res, next) => {
     }
 
     // Call AI service to evaluate answers
-    const evaluation = await evaluateAnswers(interview.questions, answers);
+    let evaluation = await evaluateAnswers(interview.questions, answers);
+
+    // Fallback to mock service if OpenAI fails (quota exceeded, etc.)
+    if (!evaluation.success) {
+      console.warn('⚠️  OpenAI failed, using mock evaluation for testing...');
+      evaluation = await aiServiceMock.evaluateAnswers(interview.questions, answers);
+    }
 
     if (!evaluation.success) {
       const error = new Error(evaluation.message || 'Failed to evaluate answers');
@@ -123,6 +143,8 @@ const submitInterview = async (req, res, next) => {
     interview.scores = evaluation.scores;
     interview.overallScore = evaluation.overallScore;
     interview.feedback = evaluation.feedback;
+    interview.status = 'completed';
+    interview.completedAt = new Date();
 
     await interview.save();
 
